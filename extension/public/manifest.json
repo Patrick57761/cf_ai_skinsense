@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "SkinSense",
+  "version": "0.1.0",
+  "description": "AI-powered skincare product analysis",
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

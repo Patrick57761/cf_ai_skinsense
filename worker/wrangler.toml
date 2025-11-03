@@ -4,3 +4,11 @@ compatibility_date = "2024-11-27"
 
 [ai]
 binding = "AI"
+
+[[durable_objects.bindings]]
+name = "PRODUCT_CACHE"
+class_name = "ProductCache"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ProductCache"]

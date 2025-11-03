@@ -1,7 +1,3 @@
-# Private Development Notes
-*.private.md
-.dev/
-
 # Dependencies
 node_modules/
 .pnp
@@ -53,4 +49,5 @@ lerna-debug.log*
 # Temporary files
 *.tmp
 *.temp
+*.private.md
 .cache/

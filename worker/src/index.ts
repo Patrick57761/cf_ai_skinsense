@@ -1,4 +1,5 @@
 import { ProductCache } from './durable-objects/ProductCache';
+import { extractProductInfo } from './ai/extractProduct';
 
 interface Env {
   AI: Ai;
@@ -71,6 +72,65 @@ export default {
             }
           }
         );
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/v1/products/extract') {
+      try {
+        const body = await request.json();
+        const pageText = body.pageText;
+        const rawProductName = body.rawProductName;
+        const rawBrand = body.rawBrand || '';
+
+        if (!pageText || !rawProductName) {
+          const errorResponse = {
+            error: 'Missing required fields'
+          };
+          return new Response(JSON.stringify(errorResponse), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const extracted = await extractProductInfo(
+          env.AI,
+          pageText,
+          rawProductName,
+          rawBrand
+        );
+
+        const successResponse = {
+          success: true,
+          productName: extracted.productName,
+          brand: extracted.brand,
+          confidence: extracted.confidence,
+          timestamp: new Date().toISOString()
+        };
+
+        return new Response(JSON.stringify(successResponse), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      } catch (error) {
+        let errorMessage = 'Unknown error';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+
+        const errorResponse = {
+          success: false,
+          error: errorMessage
+        };
+
+        return new Response(JSON.stringify(errorResponse), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
       }
     }
 

@@ -4,9 +4,17 @@
   "version": "0.1.0",
   "description": "AI-powered skincare product analysis",
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "src/popup/index.html"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
   ]
 }

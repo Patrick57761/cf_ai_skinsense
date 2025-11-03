@@ -9,6 +9,8 @@ export default function App() {
   const [skinType, setSkinType] = useState<SkinType>('normal');
   const [climate, setClimate] = useState<Climate>('temperate');
   const [concerns, setConcerns] = useState<SkinConcern[]>([]);
+  const [detectedProduct, setDetectedProduct] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -42,6 +44,37 @@ export default function App() {
       setConcerns(concerns.filter(c => c !== concern));
     } else {
       setConcerns([...concerns, concern]);
+    }
+  };
+
+  const handleAnalyzeProduct = async () => {
+    setIsAnalyzing(true);
+    setDetectedProduct(null);
+
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const currentTab = tabs[0];
+
+      if (!currentTab.id) {
+        alert('No active tab found');
+        setIsAnalyzing(false);
+        return;
+      }
+
+      const message = { type: 'SCRAPE_PRODUCT' };
+      const response = await chrome.tabs.sendMessage(currentTab.id, message);
+
+      if (response.success) {
+        setDetectedProduct(response.data);
+      } else {
+        alert('Failed to detect product on this page');
+      }
+
+      setIsAnalyzing(false);
+    } catch (error) {
+      console.error('Error analyzing product:', error);
+      alert('Error: Make sure you are on a product page');
+      setIsAnalyzing(false);
     }
   };
 
@@ -134,10 +167,22 @@ export default function App() {
       </button>
 
       <button
-        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
+        onClick={handleAnalyzeProduct}
+        disabled={isAnalyzing}
+        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400"
       >
-        Analyze This Product
+        {isAnalyzing ? 'Analyzing...' : 'Analyze This Product'}
       </button>
+
+      {detectedProduct && (
+        <div className="mt-4 bg-white p-4 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-2">Detected Product</h2>
+          <p className="text-sm text-gray-600">Name: <span className="font-medium">{detectedProduct.productName}</span></p>
+          <p className="text-sm text-gray-600">Brand: <span className="font-medium">{detectedProduct.brand || 'Unknown'}</span></p>
+          <p className="text-sm text-gray-600">Ingredients: <span className="font-medium">{detectedProduct.ingredients.length} found</span></p>
+          <p className="text-sm text-gray-600 break-all">URL: <span className="font-medium text-xs">{detectedProduct.url}</span></p>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Private Development Notes
-CLAUDE.md
-.claude/
+*.private.md
+.dev/
 
 # Dependencies
 node_modules/

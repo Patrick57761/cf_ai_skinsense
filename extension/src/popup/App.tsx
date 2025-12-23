@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { storage } from '../lib/storage';
 import type { UserSkinProfile, SkinType, Climate, SkinConcern } from '@shared/types';
 import { SKIN_TYPES, CLIMATES, SKIN_CONCERNS } from '@shared/constants/skinTypes';
+import { API_ENDPOINTS } from '../config';
 
 export default function App() {
   const [profile, setProfile] = useState<UserSkinProfile | null>(null);
@@ -61,19 +62,67 @@ export default function App() {
         return;
       }
 
+      if (!profile) {
+        alert('Please set up your profile first');
+        setIsAnalyzing(false);
+        return;
+      }
+
       const message = { type: 'SCRAPE_PRODUCT' };
       const response = await chrome.tabs.sendMessage(currentTab.id, message);
 
-      if (response.success) {
-        setDetectedProduct(response.data);
-      } else {
-        alert('Failed to detect product on this page');
+      if (!response.success) {
+        alert('Failed to scrape page');
+        setIsAnalyzing(false);
+        return;
       }
+
+      const extractResponse = await fetch(API_ENDPOINTS.extractProduct, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          pageText: response.data.pageText,
+          pageInfo: response.data.pageInfo
+        })
+      });
+
+      const extractData = await extractResponse.json();
+
+      if (!extractData.success) {
+        alert('Failed to extract product information');
+        setIsAnalyzing(false);
+        return;
+      }
+
+      const analyzeResponse = await fetch(API_ENDPOINTS.analyzeProduct, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          productName: extractData.productName,
+          brand: extractData.brand,
+          ingredients: response.data.ingredients,
+          userProfile: profile
+        })
+      });
+
+      const analysisData = await analyzeResponse.json();
+
+      setDetectedProduct({
+        productName: extractData.productName,
+        brand: extractData.brand,
+        ingredients: response.data.ingredients,
+        url: response.data.pageInfo.url,
+        analysis: analysisData.analysis
+      });
 
       setIsAnalyzing(false);
     } catch (error) {
       console.error('Error analyzing product:', error);
-      alert('Error: Make sure you are on a product page');
+      alert('Error: Make sure you are on a product page and the worker is running');
       setIsAnalyzing(false);
     }
   };
@@ -175,12 +224,81 @@ export default function App() {
       </button>
 
       {detectedProduct && (
-        <div className="mt-4 bg-white p-4 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-2">Detected Product</h2>
-          <p className="text-sm text-gray-600">Name: <span className="font-medium">{detectedProduct.productName}</span></p>
-          <p className="text-sm text-gray-600">Brand: <span className="font-medium">{detectedProduct.brand || 'Unknown'}</span></p>
-          <p className="text-sm text-gray-600">Ingredients: <span className="font-medium">{detectedProduct.ingredients.length} found</span></p>
-          <p className="text-sm text-gray-600 break-all">URL: <span className="font-medium text-xs">{detectedProduct.url}</span></p>
+        <div className="mt-4 space-y-4">
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h2 className="text-xl font-bold text-gray-800">{detectedProduct.productName}</h2>
+            <p className="text-sm text-gray-600 mb-2">{detectedProduct.brand || 'Unknown Brand'}</p>
+
+            {detectedProduct.analysis && (
+              <>
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-700">Score</span>
+                    <span className="text-lg font-bold text-gray-900">{detectedProduct.analysis.score}/10</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500"
+                      style={{ width: `${(detectedProduct.analysis.score / 10) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {detectedProduct.analysis.ingredients.good.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-green-700 mb-2">Good Ingredients</h3>
+                    {detectedProduct.analysis.ingredients.good.map((item: any, index: number) => (
+                      <div key={index} className="text-xs mb-1">
+                        <span className="font-medium">{item.name}:</span> {item.reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {detectedProduct.analysis.ingredients.bad.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-red-700 mb-2">Concerns</h3>
+                    {detectedProduct.analysis.ingredients.bad.map((item: any, index: number) => (
+                      <div key={index} className="text-xs mb-1">
+                        <span className="font-medium">{item.name}:</span> {item.reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {detectedProduct.analysis.reddit && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-blue-700 mb-2">
+                      Reddit Reviews ({detectedProduct.analysis.reddit.totalReviews} posts, {detectedProduct.analysis.reddit.positivePercent}% positive)
+                    </h3>
+                    <p className="text-xs text-gray-700 mb-2">{detectedProduct.analysis.reddit.summary}</p>
+                    {detectedProduct.analysis.reddit.topPosts && detectedProduct.analysis.reddit.topPosts.length > 0 && (
+                      <div className="space-y-1">
+                        {detectedProduct.analysis.reddit.topPosts.slice(0, 3).map((post: any, index: number) => (
+                          <a
+                            key={index}
+                            href={post.url}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              chrome.tabs.create({ url: post.url, active: false });
+                            }}
+                            className="block text-xs text-blue-600 hover:underline cursor-pointer"
+                          >
+                            {post.title.substring(0, 60)}...
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-4 border-t border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-1">Recommendation</h3>
+                  <p className="text-xs text-gray-700">{detectedProduct.analysis.recommendation.reasoning}</p>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

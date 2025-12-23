@@ -81,6 +81,14 @@ export class ProductCache {
       });
     }
 
+    if (request.method === 'DELETE') {
+      await this.state.storage.delete(productId);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     return new Response('Method not allowed', { status: 405 });
   }
 }

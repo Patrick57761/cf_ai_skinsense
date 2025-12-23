@@ -11,4 +11,4 @@ class_name = "ProductCache"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["ProductCache"]
+new_sqlite_classes = ["ProductCache"]
